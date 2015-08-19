@@ -2,12 +2,7 @@
 error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED);
 require 'vendor/autoload.php';
 
-$dataSourceName = "mysql:dbname=member;host=localhost";
-$username = "homestead";
-$password = "secret";
-
-$pdo = new PDO($dataSourceName, $username, $password);
-$db = new NotORM($pdo);
+$db = new PDO('sqlite:db.sqlite3');
 
 $app = new \Slim\Slim();
 
@@ -52,39 +47,42 @@ $app->get('/api', function() use ($app) {
 
 $app->get('/api/members/:username', function($username) use ($app, $db) {
 
-    $result = $db->members()->where('name like ?', "%$username%")
-                ->or('facebook like ?', "%$username%")
-                ->or('twitter like ?', "%$username%")
-                ->or('github like ?', "%$username%")
-                ->or('telegram like ?', "%$username%")
-                ->limit(1);
+    $query = $db->prepare("SELECT * FROM members WHERE name LIKE ? OR facebook LIKE ? OR twitter LIKE ? OR github LIKE ? OR telegram LIKE ? LIMIT 1;");
+    $query->execute(array(
+        "%$username%",
+        "%$username%",
+        "%$username%",
+        "%$username%",
+        "%$username%"
+    ));
 
-    $member = $result->fetch();
+    $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
 
     if ($member) {
 
-        $skills = $member['skills'] ? explode(',', $member['skills']) : array();
+        $skills = $member->skills ? explode(',', $member->skills) : array();
 
         $app->render(200, array(
-            'name' => $member['name'],
-            'location' => $member['location'],
-            'position' => $member['position'],
-            'company' => $member['company'],
+            'id' => (int)$member->id,
+            'name' => $member->name,
+            'location' => $member->location,
+            'position' => $member->position,
+            'company' => $member->company,
             'skills' => $skills,
             'social' => array(
                 'facebook' => array(
-                    'username' => $member['facebook'],
-                    'uri' => $member['facebook'] ? 'https://facebook.com/' . $member['facebook'] : null
+                    'username' => $member->facebook,
+                    'uri' => $member->facebook ? 'https://facebook.com/' . $member->facebook : null
                 ),
                 'twitter' => array(
-                    'username' => $member['twitter'],
-                    'uri' => $member['twitter'] ? 'https://twitter.com/' . $member['twitter'] : null
+                    'username' => $member->twitter,
+                    'uri' => $member->twitter ? 'https://twitter.com/' . $member->twitter : null
                 ),
                 'github' => array(
-                    'username' => $member['github'],
-                    'uri' => $member['github'] ? 'https://github.com/' . $member['github'] : null
+                    'username' => $member->github,
+                    'uri' => $member->github ? 'https://github.com/' . $member->github : null
                 ),
-                'telegram' => $member['telegram']
+                'telegram' => $member->telegram
             )
         ));
     } else {
@@ -107,11 +105,25 @@ $app->post("/api/members", function () use($app, $db) {
         ));
     }
 
-    if ($db->members->insert($post)) {
+    $skills = $post['skills'] ? explode(',', $post['skills']) : array();
 
-        $skills = $post['skills'] ? explode(',', $post['skills']) : array();
+    $query = $db->prepare('INSERT INTO members (name, location, position, skills, facebook, twitter, github, telegram) '.
+             'VALUES (?, ?, ?, ?, ?, ?, ?, ?);');
+    $query->execute(array(
+        $post['name'],
+        $post['location'],
+        $post['position'],
+        $skills,
+        $post['facebook'],
+        $post['twitter'],
+        $post['github'],
+        $post['telegram']
+    ));
+
+    if ($query->rowCount() == 1) {
 
         $app->render(200, array(
+            'id' => (int)$db->lastInsertId(),
             'name' => $post['name'],
             'location' => $post['location'],
             'position' => $post['position'],
@@ -144,41 +156,77 @@ $app->post("/api/members", function () use($app, $db) {
 
 $app->put("/api/members/:id", function ($id) use ($app, $db) {
 
-    $member = $db->members()->where('id', $id);
+    $query = $db->prepare('SELECT * FROM members WHERE id = ? LIMIT 1;');
+    $query->execute(array(intval($id)));
 
-    if ($member->fetch()) {
+    $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
+
+    if ($member) {
         $put = $app->request()->put();
 
         foreach ($put as $k => $v) {
-            if (!$put[$k]) {
-                unset($put[$k]);
+            if ($k == 'name') {
+                $name = ", name  = '" . $put['name'] . "'";
+            }
+            if ($k == 'location') {
+                $location = ", location  = '" . $put['location'] . "'";
+            }
+            if ($k == 'position') {
+                $position = ", position  = '" . $put['position'] . "'";
+            }
+            if ($k == 'company') {
+                $company = ", company  = '" . $put['company'] . "'";
+            }
+            if ($k == 'skills') {
+                $skills = ", skills  = '" . $put['skills'] . "'";
+            }
+            if ($k == 'facebook') {
+                $facebook = ", facebook  = '" . $put['facebook'] . "'";
+            }
+            if ($k == 'twitter') {
+                $twitter = ", twitter  = '" . $put['twitter'] . "'";
+            }
+            if ($k == 'github') {
+                $github = ", github  = '" . $put['github'] . "'";
+            }
+            if ($k == 'telegram') {
+                $telegram = ", telegram  = '" . $put['telegram'] . "'";
             }
         }
 
-        if ($member->update($put)) {
+        $query = $db->prepare("UPDATE members SET id = $id $name $location $position $company $skills $facebook $twitter $github $telegram WHERE id = ?;");
+        $query->execute(array(intval($id)));
 
-            $skills = $put['skills'] ? explode(',', $put['skills']) : array();
+        if ($query->rowCount() == 1) {
+
+            $query = $db->prepare('SELECT * FROM members WHERE id = ? LIMIT 1;');
+            $query->execute(array(intval($id)));
+
+            $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
+
+            $skills = $member->skills ? explode(',', $member->skills) : array();
 
             $app->render(200, array(
-                'name' => $put['name'],
-                'location' => $put['location'],
-                'position' => $put['position'],
-                'company' => $put['company'],
+                'id' => (int)$member->id,
+                'name' => $member->name,
+                'location' => $member->location,
+                'position' => $member->position,
+                'company' => $member->company,
                 'skills' => $skills,
                 'social' => array(
                     'facebook' => array(
-                        'username' => $put['facebook'],
-                        'uri' => $put['facebook'] ? 'https://facebook.com/' . $put['facebook'] : null
+                        'username' => $member->facebook,
+                        'uri' => $member->facebook ? 'https://facebook.com/' . $member->facebook : null
                     ),
                     'twitter' => array(
-                        'username' => $put['twitter'],
-                        'uri' => $put['twitter'] ? 'https://twitter.com/' . $put['twitter'] : null
+                        'username' => $member->twitter,
+                        'uri' => $member->twitter ? 'https://twitter.com/' . $member->twitter : null
                     ),
                     'github' => array(
-                        'username' => $put['github'],
-                        'uri' => $put['github'] ? 'https://github.com/' . $put['github'] : null
+                        'username' => $member->github,
+                        'uri' => $member->github ? 'https://github.com/' . $member->github : null
                     ),
-                    'telegram' => $put['telegram']
+                    'telegram' => $member->telegram
                 )
             ));
         } else {
@@ -195,6 +243,26 @@ $app->put("/api/members/:id", function ($id) use ($app, $db) {
             'msg'   => 'Invalid Id.'
         ));
     }
+});
+
+$app->get('/install', function () use ($app, $db) {
+
+    $db->exec('CREATE TABLE IF NOT EXISTS members (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT,
+                    location TEXT,
+                    position TEXT,
+                    company TEXT,
+                    skills TEXT,
+                    facebook TEXT,
+                    twitter TEXT,
+                    github TEXT,
+                    telegram TEXT);');
+
+    $app->render(200, array(
+        'error' => false,
+        'msg'   => 'Database is ready!'
+    ));
 });
 
 $app->run();
