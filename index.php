@@ -56,7 +56,7 @@ $app->get('/api/members/:username', function($username) use ($app, $db) {
         "%$username%"
     ));
 
-    $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
+    $member = array_shift($query->fetchAll(PDO::FETCH_CLASS));
 
     if ($member) {
 
@@ -159,7 +159,7 @@ $app->put("/api/members/:id", function ($id) use ($app, $db) {
     $query = $db->prepare('SELECT * FROM members WHERE id = ? LIMIT 1;');
     $query->execute(array(intval($id)));
 
-    $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
+    $member = array_shift($query->fetchAll(PDO::FETCH_CLASS));
 
     if ($member) {
         $put = $app->request()->put();
@@ -202,7 +202,7 @@ $app->put("/api/members/:id", function ($id) use ($app, $db) {
             $query = $db->prepare('SELECT * FROM members WHERE id = ? LIMIT 1;');
             $query->execute(array(intval($id)));
 
-            $member = $query->fetchAll(PDO::FETCH_CLASS)[0];
+            $member = array_shift($query->fetchAll(PDO::FETCH_CLASS));
 
             $skills = $member->skills ? explode(',', $member->skills) : array();
 
