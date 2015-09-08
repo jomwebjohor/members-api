@@ -48,12 +48,12 @@ $app->get('/api', function() use ($app) {
 $app->get('/api/members', function() use ($app, $db) {
 
     // Return all members
-    $members = $db->query("SELECT * FROM members;")->fetchAll();
+    $members = $db->query("SELECT * FROM members;")->fetchAll(PDO::FETCH_CLASS);
 
 
     if ($members) {
 
-        $app->render(200, $members);
+        echo json_encode($members);
 
     } else {
 
