@@ -45,6 +45,27 @@ $app->get('/api', function() use ($app) {
     ));
 });
 
+$app->get('/api/members', function() use ($app, $db) {
+
+    // Return all members
+    $members = $db->query("SELECT * FROM members;")->fetchAll(PDO::FETCH_CLASS);
+
+
+    if ($members) {
+
+        echo json_encode($members);
+
+    } else {
+
+        $app->render(404, array(
+            'error' => true,
+            'msg'   => 'There are still no members.'
+        ));
+
+    }
+
+});
+
 $app->get('/api/members/:username', function($username) use ($app, $db) {
 
     $query = $db->prepare("SELECT * FROM members WHERE name LIKE ? OR facebook LIKE ? OR twitter LIKE ? OR github LIKE ? OR telegram LIKE ? LIMIT 1;");
