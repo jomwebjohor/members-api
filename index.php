@@ -53,7 +53,9 @@ $app->get('/api/members', function() use ($app, $db) {
 
     if ($members) {
 
-        echo json_encode($members);
+        $app->response->setStatus(200);
+        $app->response->headers->set('Content-Type', 'application/json');
+        $app->response->setBody(json_encode($members));
 
     } else {
 
